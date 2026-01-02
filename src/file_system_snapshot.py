@@ -1,14 +1,14 @@
-import os
 import hashlib
+import json
+import os
+import queue
 import shutil
-import threading
 import signal
 import sys
-import json
-import queue
-from typing import Callable, Iterable, Generator
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, BinaryIO, Callable, Generator
 
 type FileHandler = Callable[[Path,Path], None]
 
@@ -21,7 +21,7 @@ class FileSystemSnapshot:
                  hash_algorithm:   str='blake2b',
                  threads:          int=4,
                  dry_mode:         bool=True,
-                 verbose:          bool=False):
+                 verbose:          bool=False) -> None:
 
         self.handle_file    : FileHandler
         self.handle_dir     : FileHandler
@@ -31,7 +31,7 @@ class FileSystemSnapshot:
         self._hash_tree_write_lock = threading.Lock()
         self._file_write_lock      = threading.Lock()
         self.output_path           = Path(snapshots_dir).resolve()
-        self.cache_path            = self.output_path / f'.cacheback.d'
+        self.cache_path            = self.output_path / '.cacheback.d'
         self.snapshot_name         = snapshot_name
         self.blob_store_path       = self.cache_path / 'blob'
         self.snapshot_path         = self.output_path / snapshot_name
@@ -68,21 +68,21 @@ class FileSystemSnapshot:
         signal.signal(signal.SIGWINCH, self._read_terminal_width)
 
 
-    def _read_terminal_width(self, *_):
+    def _read_terminal_width(self, *_: Any) -> None:
         with self._print_lock:
             self._terminal_width = shutil.get_terminal_size((80,0)).columns
 
 
-    def printerr(self, *args, **kwargs):
+    def printerr(self, *args: Any, **kwargs: Any) -> None:
         kwargs['file']=sys.stderr
         print(*args, **kwargs)
 
 
-    def _count_wrapped_lines(self, text: str):
+    def _count_wrapped_lines(self, text: str) -> int:
         return (len(text)-1) // self._terminal_width
 
 
-    def print_ephemeral(self, text: str=''):
+    def print_ephemeral(self, text: str='') -> None:
         lines = text.splitlines()
         rows = (len(lines)-1) + sum(map(self._count_wrapped_lines, lines))
         if rows > 0:
@@ -93,7 +93,7 @@ class FileSystemSnapshot:
         sys.stderr.flush()
 
 
-    def print_persistent(self, text: str=''):
+    def print_persistent(self, text: str='') -> None:
         with self._print_lock:
             sys.stdout.write(f"\033[0G\033[0J{text}\n")
             sys.stdout.flush()
@@ -149,7 +149,7 @@ class FileSystemSnapshot:
         with self.hash_cache_path.open('r') as cache_fd:
             hash_tree_cached = json.load(cache_fd)
 
-        def _recursive_path_reconstruct_iter(parent: Path, tree_node: dict):
+        def _recursive_path_reconstruct_iter(parent: Path, tree_node: dict) -> Generator:
             for k, v in tree_node.items():
                 path = parent / k
                 if isinstance(v, dict):
@@ -187,7 +187,7 @@ class FileSystemSnapshot:
         current_mtime = self.get_file_modified_time(file_path)
         file_hash = None
         if (cached_props := self.hash_tree.get(str(file_path))):
-            cached_mtime, cached_hash, visited = cached_props
+            cached_mtime, cached_hash, _visited = cached_props
             if cached_mtime == current_mtime:
                 file_hash = cached_hash
         if not file_hash:
@@ -226,13 +226,16 @@ class FileSystemSnapshot:
         if destination.exists():
             if self._verbose:
                 if destination.samefile(blob_path):
-                    self.print_persistent(f"{file} is already linked to {file_hash} in this snapshot. The most"
-                             " likely cause of this is that a symlink captured in this snapshot points"
-                             " to this path.")
+                    self.print_persistent(
+                        f"{file} is already linked to {file_hash} in this snapshot. The most"
+                        " likely cause of this is that a symlink captured in this snapshot points"
+                        " to this path.")
                 else:
-                    self.print_persistent(f"{file} already exists in this snapshot but it does not target the blob"
-                             f" in the cache that matches its current hash {file_hash}. Something"
-                             " unexpected has occured, dropping into and interactive debugger.")
+                    self.print_persistent(
+                        f"{file} already exists in this snapshot but it does not target the blob"
+                        f" in the cache that matches its current hash {file_hash}. Something"
+                        " unexpected has occured, dropping into and interactive debugger."
+                    )
                     breakpoint()
         else:
             destination.hardlink_to(blob_path)
@@ -285,7 +288,7 @@ class FileSystemSnapshot:
             breakpoint(header=f"Unhandled type for {path}")
 
 
-    def snapshot_by_type(self, path: Path):
+    def snapshot_by_type(self, path: Path) -> None:
         destination = Path(f"{self.snapshot_path}/{path}")
         if path.is_symlink():
             return self.handle_symlink(path, destination)
@@ -311,7 +314,11 @@ class FileSystemSnapshot:
 
 
     @staticmethod
-    def _copy_bytes(fsrc, fdest, callback, total, length):
+    def _copy_bytes(fsrc: BinaryIO,
+                    fdest: BinaryIO,
+                    callback: Callable,
+                    total: int,
+                    length: int) -> None:
         copied = 0
         while True:
             buf = fsrc.read(length)
@@ -325,8 +332,8 @@ class FileSystemSnapshot:
     def _copy_file_with_callback(self,
                                  source_path: Path,
                                  destination_path: Path,
-                                 callback: callable,
-                                 callback_batch_size=65536):
+                                 callback: Callable,
+                                 callback_batch_size: int=65536) -> None:
         size = os.stat(source_path).st_size
         with open(source_path, "rb") as fsrc:
             with open(destination_path, "wb") as fdest:
@@ -343,12 +350,12 @@ class FileSystemSnapshot:
         template_size = len(template.format(filled='',empty=''))
         template_ansi = f"\033[0J{template}\033[0G"
 
-        def _progress_printer(current: int, total: int):
+        def _progress_printer(current: int, total: int) -> str:
             bar_width = self._terminal_width - template_size
             progress = (current * bar_width) // total
             filled = '-' * progress
             empty = ' ' * (bar_width - progress)
-            return template.format(filled=filled, empty=empty)
+            return template_ansi.format(filled=filled, empty=empty)
 
         return _progress_printer
 
@@ -356,15 +363,17 @@ class FileSystemSnapshot:
     def copy_file_with_progress(self, source_path: Path, destination_path: Path) -> None:
         _file_progress = self.make_progress_printer(str(source_path))
         if self._verbose:
-            _callback = lambda x,y: self.printerr(_file_progress(x,y), end='\r')
+            def _callback(x: int, y: int) -> None:
+                self.printerr(_file_progress(x,y), end='\r')
         else:
-            _callback = lambda x,y: self.update_thread_status(_file_progress(x,y))
+            def _callback(x: int, y: int) -> None:
+                self.update_thread_status(_file_progress(x,y))
         _callback(0,1)
         self._copy_file_with_callback(source_path, destination_path, _callback)
         self.print_persistent(f"\r\033[0JCopied {source_path}")
 
 
-    def garbage_collect_blob_cache(self, threads=1) -> None:
+    def garbage_collect_blob_cache(self, threads: int=1) -> None:
         blobs = self.blob_store_path.rglob('*')
         thread_stop_event = threading.Event()
         blob_queue = queue.SimpleQueue()
@@ -373,7 +382,7 @@ class FileSystemSnapshot:
         _gc_progress = self.make_progress_printer("Garbage collecting")
         self.printerr(_gc_progress(0, 1), end='\r')
 
-        def _check_blob_queue_thread_task():
+        def _check_blob_queue_thread_task() -> None:
             nonlocal blobs_checked, blobs_total
             while True:
                 try:
@@ -396,7 +405,7 @@ class FileSystemSnapshot:
                         return
 
         pool = ThreadPoolExecutor(max_workers=threads)
-        futures = [pool.submit(_check_blob_queue_thread_task) for i in range(threads)]
+        _futures = [pool.submit(_check_blob_queue_thread_task) for i in range(threads)]
         for blob in blobs:
             blobs_total += 1
             blob_queue.put(blob)

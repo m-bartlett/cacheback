@@ -17,8 +17,14 @@ classifiers = [
 ]
 license = "MIT"
 
-[project.scripts]
-cacheback = "cacheback.__main__:main"
+urls = [
+    {Homepage = "https://github.com/m-bartlett/cacheback"},
+    {Issues = "https://github.com/m-bartlett/cacheback/issues"}
+]
+
+scripts = [
+    {cacheback = "cacheback.__main__:main"}
+]
 
 [build-system]
 requires = ["setuptools"]
@@ -28,12 +34,35 @@ build-backend = "setuptools.build_meta"
 package-dir = {"cacheback" = "src"}
 
 [tool.ty.environment]
-root = ["./src",  "."]
+root = ["."]
 python-version = "3.13"
 
 [tool.ty.rules]
 division-by-zero = "ignore"
 
-[project.urls]
-Homepage = "https://github.com/m-bartlett/cacheback"
-Issues = "https://github.com/m-bartlett/cacheback/issues"
+[tool.ruff]
+line-length = 100
+indent-width = 4
+target-version = "py313"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.ruff.lint]
+select = [
+    "F",   # pyflakes
+    "E",   # pycodestyle
+    "I",   # isort
+    "ANN", # flake8 type annotations
+    "RUF", # ruff-specific rules
+]
+fixable = ["ALL"]
+
+[tool.ruff.lint.flake8-annotations]
+allow-star-arg-any = true
+suppress-dummy-args = false
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"

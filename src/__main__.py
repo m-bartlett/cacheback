@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import importlib.metadata
 import sys
-from datetime import datetime
 from argparse import ArgumentParser
+from datetime import datetime
+
 from .file_system_snapshot import FileSystemSnapshot
 
 
@@ -14,7 +15,7 @@ def get_version_string() -> str:
         return "0.0.1"
 
 
-def main():
+def main() -> int:
     parser = ArgumentParser()
 
     parser.add_argument('--destination', '-o',
@@ -37,7 +38,7 @@ def main():
 
     parser.add_argument('--snapshot-name', '-n',
                         default=datetime.now().strftime('%F %H:%M'),
-                        help=f"""Name to use for this snapshot's directory. Defaults to the current
+                        help="""Name to use for this snapshot's directory. Defaults to the current
                                  timestamp with filesystem-naming compatible delimiters.""")
 
     parser.add_argument('--hash-algorithm',
