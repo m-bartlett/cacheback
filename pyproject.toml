@@ -1,0 +1,39 @@
+[project]
+name = "cacheback"
+version = "0.0.1"
+
+authors = [
+    { name="MB" },
+]
+
+description = """
+    File system snapshotting tool that prioritizes speed and reducing redundant storage.
+"""
+
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+]
+license = "MIT"
+
+[project.scripts]
+cacheback = "cacheback.__main__:main"
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"cacheback" = "src"}
+
+[tool.ty.environment]
+root = ["./src",  "."]
+python-version = "3.13"
+
+[tool.ty.rules]
+division-by-zero = "ignore"
+
+[project.urls]
+Homepage = "https://github.com/m-bartlett/cacheback"
+Issues = "https://github.com/m-bartlett/cacheback/issues"

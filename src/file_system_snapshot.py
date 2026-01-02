@@ -6,9 +6,11 @@ import signal
 import sys
 import json
 import queue
+from typing import Callable, Iterable, Generator
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+type FileHandler = Callable[[Path,Path], None]
 
 class FileSystemSnapshot:
     def __init__(self,
@@ -20,6 +22,11 @@ class FileSystemSnapshot:
                  threads:          int=4,
                  dry_mode:         bool=True,
                  verbose:          bool=False):
+
+        self.handle_file    : FileHandler
+        self.handle_dir     : FileHandler
+        self.handle_symlink : FileHandler
+
         self._print_lock           = threading.Lock()
         self._hash_tree_write_lock = threading.Lock()
         self._file_write_lock      = threading.Lock()
@@ -36,12 +43,17 @@ class FileSystemSnapshot:
         self.threads               = threads
         self._thread_outputs       = {}
 
+
         self.exclude_patterns.add(f"{self.output_path}")
 
         if dry_mode:
-            self.handle_file    = self.handle_file_dry
-            self.handle_dir     = self.handle_dir_dry
-            self.handle_symlink = self.handle_symlink_dry
+            self.handle_file    = self._handle_file_dry
+            self.handle_dir     = self._handle_dir_dry
+            self.handle_symlink = self._handle_symlink_dry
+        else:
+            self.handle_file    = self._handle_file
+            self.handle_dir     = self._handle_dir
+            self.handle_symlink = self._handle_symlink
 
         if verbose:
             self._verbose = True
@@ -87,16 +99,16 @@ class FileSystemSnapshot:
             sys.stdout.flush()
 
 
-    def target_iter(self) -> iter:
+    def target_iter(self) -> Generator[Path]:
         for target in self.target_paths:
             yield from self.path_recursive_iter(target)
 
 
-    def is_path_excluded(self, path: Path):
+    def is_path_excluded(self, path: Path) -> bool:
         return any(path.full_match(xpat) for xpat in self.exclude_patterns)
 
 
-    def path_recursive_iter(self, path: Path) -> iter:
+    def path_recursive_iter(self, path: Path) -> Generator[Path]:
         if self.is_path_excluded(path):
             self.print_persistent(f"Excluding {path}")
             return
@@ -117,7 +129,7 @@ class FileSystemSnapshot:
 
     @staticmethod
     def get_nested_hash_path(file_hash:      str,
-                             dir_delimiter:  str='/',
+                             dir_delimiter:  str=os.path.sep,
                              nesting_levels: int=2,
                              nest_length:    int=3) -> str:
         _hash = file_hash
@@ -131,7 +143,7 @@ class FileSystemSnapshot:
         return hash_path
 
 
-    def load_hash_tree_cache(self):
+    def load_hash_tree_cache(self) -> None:
         if not self.hash_cache_path.exists():
             return
         with self.hash_cache_path.open('r') as cache_fd:
@@ -151,7 +163,7 @@ class FileSystemSnapshot:
         }
 
 
-    def store_hash_tree_cache(self):
+    def store_hash_tree_cache(self) -> None:
         hash_tree_nested = {}
 
         for path_str, props in self.hash_tree.items():
@@ -185,12 +197,12 @@ class FileSystemSnapshot:
         return file_hash
 
 
-    def handle_file_dry(self, file: Path, destination: Path):
+    def _handle_file_dry(self, file: Path, destination: Path) -> None:
         file_hash = self.query_hash_tree_cache(file)
         self.update_thread_status(self.format_file_status(file, file_hash))
 
 
-    def handle_file(self, file: Path, destination: Path):
+    def _handle_file(self, file: Path, destination: Path) -> None:
         file_hash = self.query_hash_tree_cache(file)
         nested_hash_path = self.get_nested_hash_path(file_hash)
 
@@ -227,20 +239,20 @@ class FileSystemSnapshot:
         return
 
 
-    def handle_dir_dry(self, directory: Path, destination: Path):
+    def _handle_dir_dry(self, directory: Path, destination: Path) -> None:
         self.update_thread_status(f"DRY: directory {directory}")
 
 
-    def handle_dir(self, directory: Path, destination: Path):
+    def _handle_dir(self, directory: Path, destination: Path) -> None:
         destination.mkdir(parents=True, exist_ok=True)
         return
 
 
-    def handle_symlink_dry(self, symlink: Path, destination: Path):
+    def _handle_symlink_dry(self, symlink: Path, destination: Path) -> None:
         self.update_thread_status(f"DRY: symlink {symlink} => {symlink.readlink()}")
 
 
-    def handle_symlink(self, symlink: Path, destination: Path):
+    def _handle_symlink(self, symlink: Path, destination: Path) -> None:
         if destination.exists():
             return
         symlink_destination = symlink.readlink()
@@ -262,11 +274,13 @@ class FileSystemSnapshot:
         if not self.is_path_excluded(symlink_destination):
             self.snapshot_by_type(symlink_destination)
         else:
-            self.print_persistent(f"Symlink {symlink} points to excluded file {symlink_destination}")
+            self.print_persistent(
+                f"Symlink {symlink} points to excluded file {symlink_destination}"
+            )
         return
 
 
-    def handle_unexpected(self, path: Path, destination: Path):
+    def handle_unexpected(self, path: Path, destination: Path) -> None:
         if path.exists():
             breakpoint(header=f"Unhandled type for {path}")
 
@@ -279,13 +293,13 @@ class FileSystemSnapshot:
             return self.handle_dir(path, destination)
         if path.is_file():
             return self.handle_file(path, destination)
-        if any(path.is_fifo(), path.is_socket(), path.is_char_device(), path.is_block_device()):
+        if any((path.is_fifo(), path.is_socket(), path.is_char_device(), path.is_block_device())):
             return
         else:
             return self.handle_unexpected(path, destination)
 
 
-    def take_snapshot(self):
+    def take_snapshot(self) -> None:
         self.blob_store_path.mkdir(parents=True, exist_ok=True)
         self.snapshot_path.mkdir(parents=True, exist_ok=False)
         self.print_persistent(f"Creating snapshot {self.snapshot_name}")
@@ -324,7 +338,7 @@ class FileSystemSnapshot:
         shutil.copymode(str(source_path), str(destination_path))
 
 
-    def make_progress_printer(self, label: str):
+    def make_progress_printer(self, label: str) -> Callable[[int,int], str]:
         template = f"{label} [{{filled}}{{empty}}]"
         template_size = len(template.format(filled='',empty=''))
         template_ansi = f"\033[0J{template}\033[0G"
@@ -339,7 +353,7 @@ class FileSystemSnapshot:
         return _progress_printer
 
 
-    def copy_file_with_progress(self, source_path: Path, destination_path: Path):
+    def copy_file_with_progress(self, source_path: Path, destination_path: Path) -> None:
         _file_progress = self.make_progress_printer(str(source_path))
         if self._verbose:
             _callback = lambda x,y: self.printerr(_file_progress(x,y), end='\r')
@@ -350,7 +364,7 @@ class FileSystemSnapshot:
         self.print_persistent(f"\r\033[0JCopied {source_path}")
 
 
-    def garbage_collect_blob_cache(self):
+    def garbage_collect_blob_cache(self, threads=1) -> None:
         blobs = self.blob_store_path.rglob('*')
         thread_stop_event = threading.Event()
         blob_queue = queue.SimpleQueue()
@@ -360,7 +374,7 @@ class FileSystemSnapshot:
         self.printerr(_gc_progress(0, 1), end='\r')
 
         def _check_blob_queue_thread_task():
-            nonlocal blobs_checked
+            nonlocal blobs_checked, blobs_total
             while True:
                 try:
                     blob = blob_queue.get(timeout=1)
@@ -370,6 +384,7 @@ class FileSystemSnapshot:
                             self.print_persistent(f"Garbage collecting {blob}")
                             blob.unlink()
                             blob_queue.put(blob.parent)
+                            blobs_total += 1
                     elif blob.is_dir():
                         if not any(blob.iterdir()):
                             self.print_persistent(f"Garbage collecting {blob}/")
@@ -380,8 +395,8 @@ class FileSystemSnapshot:
                     if thread_stop_event.is_set():
                         return
 
-        pool = ThreadPoolExecutor(max_workers=self.threads)
-        futures = [pool.submit(_check_blob_queue_thread_task) for i in range(self.threads)]
+        pool = ThreadPoolExecutor(max_workers=threads)
+        futures = [pool.submit(_check_blob_queue_thread_task) for i in range(threads)]
         for blob in blobs:
             blobs_total += 1
             blob_queue.put(blob)
@@ -392,7 +407,7 @@ class FileSystemSnapshot:
         self.print_persistent()
 
 
-    def print_thread_statuses_ephemeral(self):
+    def print_thread_statuses_ephemeral(self) -> None:
         with self._print_lock:
             dead_threads = (set(self._thread_outputs.keys())
                             .difference(t.ident for t in threading.enumerate()))
@@ -402,16 +417,16 @@ class FileSystemSnapshot:
             self.print_ephemeral(body)
 
 
-    def set_thread_status(self, text: str):
+    def set_thread_status(self, text: str) -> None:
         self._thread_outputs[threading.get_ident()] = text
 
 
-    def _update_thread_status_ephemeral(self, text: str):
+    def _update_thread_status_ephemeral(self, text: str) -> None:
         self.set_thread_status(text)
         self.print_thread_statuses_ephemeral()
 
 
-    def _update_thread_status_verbose(self, text: str):
+    def _update_thread_status_verbose(self, text: str) -> None:
         with self._print_lock:
             print(text)
 
@@ -421,7 +436,7 @@ class FileSystemSnapshot:
     _truncate_str = "…"
     _truncate_size = len(_truncate_str)
 
-    def _format_file_status_ephemeral(self, file_path: Path, file_hash: str):
+    def _format_file_status_ephemeral(self, file_path: Path, file_hash: str) -> str:
         file_path_str = str(file_path)
         hash_len_delta = len(file_hash) + self._hash_prefix_size - self._terminal_width
         if hash_len_delta > 0:
@@ -432,5 +447,5 @@ class FileSystemSnapshot:
         return f"{file_path_str}\n{self._hash_prefix}{file_hash}"
 
 
-    def _format_file_status_verbose(self, file_path: Path, file_hash: str):
+    def _format_file_status_verbose(self, file_path: Path, file_hash: str) -> str:
         return f"{file_path} -> {file_hash}"

@@ -6,12 +6,12 @@ from argparse import ArgumentParser
 from .file_system_snapshot import FileSystemSnapshot
 
 
-def get_version_string():
+def get_version_string() -> str:
     package_name = __name__.partition('.')[0]
     try:
         return importlib.metadata.version(package_name)
     except importlib.metadata.PackageNotFoundError:
-        return "0.0.0"
+        return "0.0.1"
 
 
 def main():
