@@ -1,5 +1,5 @@
 <p align="center">
-<picture width="650">
+<picture width="500">
   <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/51214078-61b3-4afe-8add-7df04a34ae54">
   <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/379c90ea-03cd-4062-a57d-d5da6fc2689f">
   <img alt="Fallback image description" src="https://github.com/user-attachments/assets/379c90ea-03cd-4062-a57d-d5da6fc2689f">
