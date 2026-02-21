@@ -1,12 +1,26 @@
 <p align="center">
-<picture width="500">
-  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/51214078-61b3-4afe-8add-7df04a34ae54">
-  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/379c90ea-03cd-4062-a57d-d5da6fc2689f">
-  <img alt="Fallback image description" src="https://github.com/user-attachments/assets/379c90ea-03cd-4062-a57d-d5da6fc2689f">
-</picture>  
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/51214078-61b3-4afe-8add-7df04a34ae54" width="700">
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/379c90ea-03cd-4062-a57d-d5da6fc2689f" width="700">
+  <img alt="Fallback image description" src="https://github.com/user-attachments/assets/379c90ea-03cd-4062-a57d-d5da6fc2689f" width="700">
+</picture>
 </p>
 
+<p align="center">
+File system snapshot tool that prioritizes snapshot speed and reducing redundant storage.
+</p>
+<br/>
+
 ## How it works
+
+`cacheback` achieves its goals of quick snapshots and minimized snapshot storage size by using hardlink features of modern filesystems
+for files whose contents are unchanged between snapshots.
+This is similar to how git tracks objects in a repository by storing a file's data based on its content hash.
+To further improve speed, a cache of the previous snapshot scan is stored which stores each file's last modification timestamp and
+these timestamps are compared before computing the file content hash. If the timestamp is unchanged, it is assumed that the file has 
+not changed since the previous snapshot and is linked to the existing content stored on disk.
+
+Here is a diagram visualizing this concept of files within snapshots being pointers to stored data based on content hash:
 
 <p align="center">
   <picture width="600">
@@ -22,6 +36,10 @@
   </picture>
 </p>
 
-```sh
+If a file is unchanged between multiple snapshots, each file will point to the same hash-named object and therefore the literal file content
+is only stored on disk one time. If snapshots are deleted and a given hashed content is no longer pointed to by any files in any snapshots,
+then the `--gargbage-collect` flag will prompt `cacheback` to purge these unused hash-named files to recover storage space.
 
-```
+## Install
+`pip install cacheback`
+
