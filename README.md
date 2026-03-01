@@ -41,5 +41,24 @@ is only stored on disk one time. If snapshots are deleted and a given hashed con
 then the `--gargbage-collect` flag will prompt `cacheback` to purge these unused hash-named files to recover storage space.
 
 ## Install
-`pip install cacheback`
+```
+pip install cacheback-snapshot
+```
 
+## Usage
+>[!NOTE]
+> The first time taking a snapshot will take much longer than subsequent snapshots, since the first run will need to copy any and all files to the snapshot storage directory. The real magic of this tool happens on the *subsequent* snapshots that target mostly the same directories.
+
+Installing the package will add an entrypoint executable `cacheback` to your configured executables directory. Run `cacheback --help` for detailed usage information.
+
+### Sample
+This example will create a snapshot in the directory in /archives/my-snapshot of the contents of /home/ and /opt/ on the current machine, and will omit including any directories or files that have the word "cache" in them. It will use 2 threads to scan over the directory hierarchies and compute hashes.
+
+```sh
+cacheback \
+  --snapshot-name 'my-snapshot' \
+  --destination /archives/ \
+  --targets /home /opt \
+  --exclude '**/*cache*' \
+  --threads 2
+```
