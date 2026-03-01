@@ -42,7 +42,7 @@ then the `--gargbage-collect` flag will prompt `cacheback` to purge these unused
 
 ## Install
 
-## PyPi
+## PyPI
 ```
 pip install cacheback-snapshot
 ```
