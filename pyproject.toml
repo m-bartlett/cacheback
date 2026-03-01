@@ -17,14 +17,13 @@ classifiers = [
 ]
 license = "MIT"
 
-urls = [
-    {Homepage = "https://github.com/m-bartlett/cacheback"},
-    {Issues = "https://github.com/m-bartlett/cacheback/issues"}
-]
 
-scripts = [
-    {cacheback = "cacheback.__main__:main"}
-]
+[project.urls]
+Homepage = "https://github.com/m-bartlett/cacheback"
+Issues = "https://github.com/m-bartlett/cacheback/issues"
+
+[project.scripts]
+cacheback = "cacheback.__main__:main"
 
 [build-system]
 requires = ["setuptools"]
