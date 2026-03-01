@@ -59,3 +59,4 @@ venv.bak/
 
 LICENSE
 assets/
+*.sublime*
