@@ -1,5 +1,5 @@
 [project]
-name = "cacheback"
+name = "cacheback-snapshot"
 version = "0.0.1"
 
 authors = [
