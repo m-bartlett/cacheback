@@ -41,8 +41,29 @@ is only stored on disk one time. If snapshots are deleted and a given hashed con
 then the `--gargbage-collect` flag will prompt `cacheback` to purge these unused hash-named files to recover storage space.
 
 ## Install
+
+## PyPi
 ```
 pip install cacheback-snapshot
+```
+
+## ZipApp
+Create an executable single-file using python's zipapp feature by running `./scripts/install-zipapp.sh <install_dir>`, for example:
+
+```console
+$ ./scripts/install-zipapp.sh ~/.local/bin/
+Processing ./.
+  Installing build dependencies ... done
+  Getting requirements to build wheel ... done
+  Preparing metadata (pyproject.toml) ... done
+Building wheels for collected packages: cacheback-snapshot
+  Building wheel for cacheback-snapshot (pyproject.toml) ... done
+Successfully built cacheback-snapshot
+Installing collected packages: cacheback-snapshot
+Successfully installed cacheback-snapshot
+
+$ ~/.local/bin/cacheback --help
+usage: python /home/m/.local/bin/cacheback ...
 ```
 
 ## Usage
